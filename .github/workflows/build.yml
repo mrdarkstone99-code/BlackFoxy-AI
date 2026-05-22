@@ -24,13 +24,12 @@ jobs:
         sudo apt-get install -y git zip unzip openjdk-17-jdk python3-pip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev libreadline-dev libffi-dev libsqlite3-dev tk-dev libgdbm-compat-dev liblzma-dev lzma
         pip3 install --user --upgrade buildozer cython virtualenv
 
+    - name: Pre-Accept Android SDK Licenses
+      run: |
+        mkdir -p ~/.android
+        touch ~/.android/repositories.cfg
+
     - name: Run Cloud Compilation
       run: |
         export PATH=$PATH:~/.local/bin
-        buildozer android debug
-
-    - name: Upload Finished APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: BlackFoxy-App
-        path: bin/*.apk
+        yes | buildozer android debug
