@@ -9,8 +9,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          persist-credentials: true # Automatically provides the security token for git downloads
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
