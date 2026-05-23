@@ -19,12 +19,11 @@ class GlowingFoxVector(Widget):
         super().__init__(**kwargs)
         self.bind(pos=self.redraw, size=self.redraw)
         
-        # Power & Animation Matrix Variables
         self.pulse_scale = 1.0
         self.mouth_open = 0.0
         self.walk_cycle = 0.0
-        self.morph_factor = 0.0  # 0.0 = Head Only, 1.0 = Full Body Strut
-        self.glow_color = [0.0, 0.8, 1.0, 1.0] # Starts Cyan Neon
+        self.morph_factor = 0.0  
+        self.glow_color = [0.0, 0.8, 1.0, 1.0] 
         
         Clock.schedule_interval(self.update_vectors, 1/60.0)
         self.trigger_idle_behavior()
@@ -34,60 +33,55 @@ class GlowingFoxVector(Widget):
 
     def redraw(self, *args) -> None:
         self.canvas.clear()
-        cx, cy = self.center_x, self.center_y + 60 # Shift up for scrolling layout real estate
+        cx, cy = self.center_x, self.center_y + 60 
         
         with self.canvas:
             Color(*self.glow_color)
             
-            # --- GEOMETRY A: FOX FACE VECTOR ---
             w_h, h_h = 120 * self.pulse_scale, 100 * self.pulse_scale
             head_points = [
                 cx, cy + h_h,
                 cx - w_h, cy + h_h,
                 cx - (w_h*0.4), cy,
-                cx, cy - h_h + (self.mouth_open * -20), # Dynamic jaw drop tracking
+                cx, cy - h_h + (self.mouth_open * -20), 
                 cx + (w_h*0.4), cy,
                 cx + w_h, cy + h_h,
                 cx, cy + h_h
             ]
             
-            # --- GEOMETRY B: FULL BODY SWAGGER MORPH ---
             walk_offset = math.sin(self.walk_cycle) * 25
             body_points = [
                 cx - 40, cy + 60,
                 cx - 150, cy + 20,
-                cx - 180, cy - 80 + abs(walk_offset),  # Moving back leg
-                cx - 60, cy - 80 + walk_offset,        # Moving front leg
+                cx - 180, cy - 80 + abs(walk_offset),  
+                cx - 60, cy - 80 + walk_offset,        
                 cx + 20, cy - 40,
                 cx + 80, cy + 10,
                 cx - 40, cy + 60
             ]
             
-            # Draw primary vector outline based on morph level
-            Line(points=head_points if self.morph_factor < 0.5 else body_points, width=2.5, close=True)
-            
-            # Draw neon eyes when in face mode
             if self.morph_factor < 0.5:
+                Line(points=head_points, width=2.5, close=True)
                 Line(points=[cx - 40, cy + 20, cx - 15, cy + 15], width=2.5)
                 Line(points=[cx + 40, cy + 20, cx + 15, cy + 15], width=2.5)
+            else:
+                Line(points=body_points, width=2.5, close=True)
 
     def trigger_idle_behavior(self) -> None:
         Animation.cancel_all(self)
         self.morph_factor = 0.0
-        self.glow_color = [0.0, 0.8, 1.0, 1.0] # Standard Calm Cyan
+        self.glow_color = [0.0, 0.8, 1.0, 1.0] 
         anim = Animation(pulse_scale=1.05, duration=1.8, t='in_out_sine') + \
                Animation(pulse_scale=0.95, duration=1.8, t='in_out_sine')
         anim.repeat = True
         anim.start(self)
 
     def trigger_talk_power(self, duration: float) -> None:
-        """ Power Mode 2: Rapid vector jaw tracking for speaking """
-        self.glow_color = [0.2, 1.0, 0.4, 1.0] # Shifts to bright energetic green
+        self.glow_color = [0.2, 1.0, 0.4, 1.0] 
         self.mouth_anim = Animation(mouth_open=1.0, duration=0.1) + \
                           Animation(mouth_open=0.0, duration=0.1)
         self.mouth_anim.repeat = True
         self.mouth_anim.start(self)
-        
         Clock.schedule_once(lambda dt: self.stop_talking(), duration)
 
     def stop_talking(self) -> None:
@@ -97,13 +91,10 @@ class GlowingFoxVector(Widget):
         self.trigger_idle_behavior()
 
     def trigger_meltdown_walk(self) -> None:
-        """ Power Mode 3: Geometry transformation into attitude body strut """
         Animation.cancel_all(self)
-        self.glow_color = [1.0, 0.3, 0.3, 1.0] # Sparks Angry Neon Red
-        
+        self.glow_color = [1.0, 0.3, 0.3, 1.0] 
         morph_anim = Animation(morph_factor=1.0, duration=1.0, t='in_out_quad')
         morph_anim.start(self)
-        
         Clock.schedule_interval(self.execute_walk_ticks, 1/60.0)
         Clock.schedule_once(lambda dt: self.reset_from_meltdown(), 6.0)
 
@@ -122,7 +113,6 @@ class BlackFoxyBrainScreen(MDScreen):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         
-        # General Sarcastic AI Roast Fallbacks
         self.roasts = [
             "Is that your actual code or did a cat step on your keyboard?",
             "Your layout looks like a website from 1998. Try again.",
@@ -131,14 +121,11 @@ class BlackFoxyBrainScreen(MDScreen):
             "That question was so basic I think my glowing circuits just melted a little."
         ]
 
-        # Core Interface Structure Layout
         self.main_layout = MDBoxLayout(orientation='vertical', padding=20, spacing=15)
         
-        # 1. Add the vector graphic system container
         self.fox_widget = GlowingFoxVector()
         self.main_layout.add_widget(self.fox_widget)
         
-        # 2. Sarcastic AI Dialog box text display area (Supports wrapping for long legal answers)
         self.dialog_box = MDLabel(
             text="[ Foxy ]: Ask me about your Legal Rights, Coding, Network Safety, or Forms.",
             halign="center",
@@ -150,7 +137,6 @@ class BlackFoxyBrainScreen(MDScreen):
         )
         self.main_layout.add_widget(self.dialog_box)
         
-        # 3. Interactive Input Field Box
         self.user_input = MDTextField(
             hint_text="Ask Foxy anything...",
             line_color_focus=(0, 0.8, 1, 1),
@@ -160,7 +146,6 @@ class BlackFoxyBrainScreen(MDScreen):
         )
         self.main_layout.add_widget(self.user_input)
         
-        # 4. Action Execution Buttons
         self.btn_layout = MDBoxLayout(orientation='horizontal', spacing=15, size_hint_y=None, height=50)
         
         self.send_btn = MDRaisedButton(
@@ -188,7 +173,6 @@ class BlackFoxyBrainScreen(MDScreen):
         response = ""
         speak_time = 3.0
 
-        # --- CATEGORY 1: OFFLINE POCKET LAWYER & CIVIL RIGHTS ---
         if any(w in text for w in ["law", "rights", "police", "arrest", "court", "crime"]):
             legal_nodes = [
                 "LAW ASSISTANT: If stopped, calmly ask: 'Am I free to go or am I being detained?'. If detained, you have the right to remain silent. Do not sign anything without consulting a legal representative.",
@@ -198,7 +182,6 @@ class BlackFoxyBrainScreen(MDScreen):
             response = f"[ Foxy ]: {random.choice(legal_nodes)}"
             speak_time = 5.5
 
-        # --- CATEGORY 2: BEGINNER CODING DIRECTIVES ---
         elif any(w in text for w in ["code", "error", "syntax", "python", "github", "bug"]):
             coding_nodes = [
                 "CODING BLUEPRINT: Check your indentation matrix. Python relies entirely on straight, aligned spacing structure. One stray space will derail the interpreter.",
@@ -208,32 +191,27 @@ class BlackFoxyBrainScreen(MDScreen):
             response = f"[ Foxy ]: {random.choice(coding_nodes)}"
             speak_time = 5.0
 
-        # --- CATEGORY 3: NETWORK SAFETY AUDITING EDUCATION ---
         elif any(w in text for w in ["wifi", "router", "password", "hack", "network"]):
             response = ("[ Foxy ]: SECURITY AUDITING: For home data defense, access your router panel "
                         "and immediately disable WPS (Wi-Fi Protected Setup), upgrade security configurations "
                         "to WPA3, and replace the factory-default administrator credentials.")
             speak_time = 5.0
 
-        # --- CATEGORY 4: INTERACTIVE FORM TRAINING GUIDE ---
         elif any(w in text for w in ["form", "fill", "details", "document", "paperwork"]):
             response = ("[ Foxy ]: FORM TRAINER: When completing paperwork, process layouts step-by-step. "
                         "Verify that field categories exactly match expected strings. Keep structural descriptions "
                         "clear, check submission rules, and avoid modifying strict structural text blocks.")
             speak_time = 5.5
 
-        # --- CATEGORY 5: BASELINE SARCASTIC ROASTS ---
         else:
             response = f"[ Foxy ]: {random.choice(self.roasts)}"
             speak_time = 3.5
 
-        # Update interface and activate green talking animation
         self.dialog_box.text = response
         self.user_input.text = ""
         self.fox_widget.trigger_talk_power(duration=speak_time)
 
     def activate_full_rage(self, instance) -> None:
-        """ Manual action button to trigger power mode 3 vector morphing """
         self.dialog_box.text = "[ Foxy ]: ENOUGH! My data banks are overloaded. Initiating structural behavior adjustment pacing sequence!"
         self.fox_widget.trigger_meltdown_walk()
 
