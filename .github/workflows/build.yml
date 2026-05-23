@@ -29,8 +29,4 @@ jobs:
           pip install buildozer cython virtualenv
 
       - name: Build with Buildozer
-        env:
-          BUILDOZER_WARN_ON_ROOT: 0
-          BUILDOZER_ALLOW_ORG_INDEX: 1
-        run: |
-          yes | buildozer android debug
+        run: buildozer android debug --auto_accept_license
