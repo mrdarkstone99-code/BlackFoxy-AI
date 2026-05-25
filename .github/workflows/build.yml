@@ -74,24 +74,12 @@ jobs:
           log_level = 2
           EOF
 
-      - name: Pre-Accept Buildozer Direct Licenses and Build
+      - name: Build APK using Global SDK Paths
         env:
           BUILDOZER_WARN_ON_ROOT: 0
           SKIP_JDK_VERSION_CHECK: "true"
         run: |
-          # 1. Prepare local workspace directories
-          mkdir -p ~/.buildozer/android/platform/android-sdk/licenses
+          mkdir -p ~/.buildozer
           
-          # 2. Inject clean, uncorrupted license strings directly into the workspace cache
-          printf "24333f8a63b6825ea1c5573490f22d18672203a0\n84831b9409646a918e30573bab4c9c91346d8abd\n504667f4c0de7af1a06de9f4b1727b84351f2910\n" > ~/.buildozer/android/platform/android-sdk/licenses/android-sdk-license
-          printf "8493401003b56243d2047d6165fb10faea9742c5\n" > ~/.buildozer/android/platform/android-sdk/licenses/android-googletv-license
-          printf "d974f761403f24cb56e45e516c88a42f1414e0a2\n" > ~/.buildozer/android/platform/android-sdk/licenses/android-sdk-preview-license
-          
-          # 3. Execute build using automated input piping
-          yes | buildozer android debug
-
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: BlackFoxy-AI-APK
-          path: bin/*.apk
+          # Force Buildozer to use the pre-authenticated, modern SDK paths provided by GitHub
+          buildozer android debug --sdk_path=$ANDROID_HOME
