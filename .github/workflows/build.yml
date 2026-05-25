@@ -25,9 +25,6 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Install system packages
         run: |
           sudo apt update
@@ -67,23 +64,28 @@ jobs:
           fullscreen = 1
 
           android.archs = arm64-v8a
-          
-          # Force Buildozer to match the pre-installed runner components perfectly
           android.api = 33
           android.minapi = 24
-          android.sdk_path = /usr/local/lib/android/sdk
-          android.ndk_path = /usr/local/lib/android/sdk/ndk/27.3.13750724
 
           [buildozer]
           log_level = 2
           EOF
 
-      - name: Accept Licenses and Compile APK
+      - name: Automate Buildozer Dependencies and Build
+        env:
+          BUILDOZER_WARN_ON_ROOT: 0
+          SKIP_JDK_VERSION_CHECK: "true"
+          GRADLE_OPTS: "-Dorg.gradle.project.android.builder.sdkDownload=true"
         run: |
-          # Pre-accept all Android SDK licenses in the runner's path
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+          # 1. Pre-populate default license directory structures natively
+          mkdir -p ~/.buildozer/android/platform/android-sdk/licenses
           
-          # Fire up Buildozer using the matching environments
+          # 2. Inject license hashes directly into the build environment cache
+          printf "24333f8a63b6825ea1c5573490f22d18672203a0\n84831b9409646a918e30573bab4c9c91346d8abd\n504667f4c0de7af1a06de9f4b1727b84351f2910\n" > ~/.buildozer/android/platform/android-sdk/licenses/android-sdk-license
+          printf "8493401003b56243d2047d6165fb10faea9742c5\n" > ~/.buildozer/android/platform/android-sdk/licenses/android-googletv-license
+          printf "d974f761403f24cb56e45e516c88a42f1414e0a2\n" > ~/.buildozer/android/platform/android-sdk/licenses/android-sdk-preview-license
+          
+          # 3. Clean compilation run
           buildozer android debug
 
       - name: Upload APK Artifact
