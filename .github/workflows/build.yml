@@ -24,39 +24,39 @@ jobs:
         with:
           python-version: "3.11"
 
-      - uses: android-actions/setup-android@v3
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK packages
+      - name: Accept Android Licenses
         run: |
-          yes | sdkmanager --licenses
+          mkdir -p ~/.android
+          touch ~/.android/repositories.cfg
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
 
-          sdkmanager \
-          "platform-tools" \
-          "platforms;android-33" \
-          "build-tools;33.0.2"
-
-      - name: Install dependencies
+      - name: Install system packages
         run: |
           sudo apt update
-
           sudo apt install -y \
-          build-essential \
-          git \
-          zip \
-          unzip \
-          libffi-dev \
-          libssl-dev \
-          zlib1g-dev \
-          pkg-config
+            build-essential \
+            git \
+            zip \
+            unzip \
+            openjdk-17-jdk \
+            libffi-dev \
+            libssl-dev \
+            zlib1g-dev \
+            pkg-config \
+            autoconf \
+            libtool
 
-      - name: Install Buildozer
+      - name: Install Python packages
         run: |
-          pip install --upgrade pip
+          python -m pip install --upgrade pip
           pip install wheel
           pip install "cython<3.0"
           pip install buildozer virtualenv
 
-      - name: Create buildozer.spec
+      - name: Generate buildozer.spec
         run: |
           cat > buildozer.spec << EOF
           [app]
@@ -72,9 +72,13 @@ jobs:
           orientation = portrait
           fullscreen = 1
 
+          android.archs = arm64-v8a
           android.api = 33
           android.minapi = 24
-          android.archs = arm64-v8a
+          
+          # Force Buildozer to use the pre-authenticated GitHub runner SDK paths
+          android.sdk_path = ${ANDROID_HOME}
+          android.ndk_path = ${ANDROID_HOME}/ndk-bundle
 
           [buildozer]
           log_level = 2
@@ -83,4 +87,7 @@ jobs:
       - name: Build APK
         env:
           BUILDOZER_WARN_ON_ROOT: 0
-        run: buildozer android debug
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+        run: |
+          mkdir -p ~/.buildozer
+          buildozer android debug
