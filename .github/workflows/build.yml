@@ -24,39 +24,39 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v3
 
-      - name: Accept Android Licenses
+      - name: Install Android SDK packages
         run: |
-          mkdir -p ~/.android
-          touch ~/.android/repositories.cfg
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+          yes | sdkmanager --licenses
 
-      - name: Install system packages
+          sdkmanager \
+          "platform-tools" \
+          "platforms;android-33" \
+          "build-tools;33.0.2"
+
+      - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install -y \
-            build-essential \
-            git \
-            zip \
-            unzip \
-            openjdk-17-jdk \
-            libffi-dev \
-            libssl-dev \
-            zlib1g-dev \
-            pkg-config \
-            autoconf \
-            libtool
 
-      - name: Install Python packages
+          sudo apt install -y \
+          build-essential \
+          git \
+          zip \
+          unzip \
+          libffi-dev \
+          libssl-dev \
+          zlib1g-dev \
+          pkg-config
+
+      - name: Install Buildozer
         run: |
-          python -m pip install --upgrade pip
+          pip install --upgrade pip
           pip install wheel
           pip install "cython<3.0"
           pip install buildozer virtualenv
 
-      - name: Generate buildozer.spec
+      - name: Create buildozer.spec
         run: |
           cat > buildozer.spec << EOF
           [app]
@@ -72,9 +72,9 @@ jobs:
           orientation = portrait
           fullscreen = 1
 
-          android.archs = arm64-v8a
           android.api = 33
           android.minapi = 24
+          android.archs = arm64-v8a
 
           [buildozer]
           log_level = 2
@@ -83,7 +83,4 @@ jobs:
       - name: Build APK
         env:
           BUILDOZER_WARN_ON_ROOT: 0
-          ANDROID_HOME: ${{ env.ANDROID_HOME }}
-        run: |
-          mkdir -p ~/.buildozer
-          buildozer android debug
+        run: buildozer android debug
