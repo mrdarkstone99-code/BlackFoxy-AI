@@ -15,11 +15,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Java 11 (For SDK Compatibility)
+      - name: Set up Java 17 (Required by modern Android SDK tools)
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "11"
+          java-version: "17"
 
       - uses: actions/setup-python@v5
         with:
@@ -83,6 +83,7 @@ jobs:
       - name: Build APK
         env:
           BUILDOZER_WARN_ON_ROOT: 0
+          SKIP_JDK_VERSION_CHECK: "true"
         run: |
           mkdir -p ~/.buildozer
           buildozer android debug
