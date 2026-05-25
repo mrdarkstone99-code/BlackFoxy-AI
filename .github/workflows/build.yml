@@ -28,6 +28,12 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Accept Global Android Licenses
+        run: |
+          mkdir -p ~/.android
+          touch ~/.android/repositories.cfg
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+
       - name: Install system packages
         run: |
           sudo apt update
@@ -74,12 +80,24 @@ jobs:
           log_level = 2
           EOF
 
-      - name: Build APK using Global SDK Paths
+      - name: Sync Licenses and Build APK
         env:
           BUILDOZER_WARN_ON_ROOT: 0
           SKIP_JDK_VERSION_CHECK: "true"
         run: |
-          mkdir -p ~/.buildozer
+          # 1. Pre-create Buildozer's expected internal license directory
+          mkdir -p ~/.buildozer/android/platform/android-sdk/licenses
           
-          # Force Buildozer to use the pre-authenticated, modern SDK paths provided by GitHub
-          buildozer android debug --sdk_path=$ANDROID_HOME
+          # 2. Copy the officially accepted global licenses directly into Buildozer's workspace path
+          if [ -d "$ANDROID_HOME/licenses" ]; then
+            cp -r $ANDROID_HOME/licenses/* ~/.buildozer/android/platform/android-sdk/licenses/
+          fi
+
+          # 3. Compile the application pointing explicitly to the active SDK path environment
+          yes | buildozer android debug --sdk_path=$ANDROID_HOME
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BlackFoxy-AI-APK
+          path: bin/*.apk
