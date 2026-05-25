@@ -21,6 +21,9 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Install System Dependencies
         run: |
           sudo apt-get update
@@ -66,8 +69,12 @@ jobs:
           log_level = 2
           EOF
 
-      - name: Build APK with Buildozer
+      - name: Pre-Accept Android Licenses and Build
         env:
           BUILDOZER_WARN_ON_ROOT: 0
+          ANDROID_HOME: /usr/local/lib/android/sdk
+          ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk-bundle
         run: |
+          mkdir -p ~/.buildozer
+          yes | sdkmanager --licenses || true
           buildozer android debug
