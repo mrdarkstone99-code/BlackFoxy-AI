@@ -93,8 +93,8 @@ jobs:
             cp -r $ANDROID_HOME/licenses/* ~/.buildozer/android/platform/android-sdk/licenses/
           fi
 
-          # 3. Compile the application pointing explicitly to the active SDK path environment
-          yes | buildozer android debug --sdk_path=$ANDROID_HOME
+          # 3. Clean execution without interactive piping over structural paths
+          buildozer android debug --sdk_path=$ANDROID_HOME
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
