@@ -28,12 +28,6 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Accept Global Android Licenses
-        run: |
-          mkdir -p ~/.android
-          touch ~/.android/repositories.cfg
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
-
       - name: Install system packages
         run: |
           sudo apt update
@@ -73,29 +67,27 @@ jobs:
           fullscreen = 1
 
           android.archs = arm64-v8a
+          
+          # Force Buildozer to match the pre-installed runner components perfectly
           android.api = 33
           android.minapi = 24
+          android.sdk_path = /usr/local/lib/android/sdk
+          android.ndk_path = /usr/local/lib/android/sdk/ndk/27.3.13750724
 
           [buildozer]
           log_level = 2
           EOF
 
-      - name: Spoof Buildozer SDK Path and Build
-        env:
-          BUILDOZER_WARN_ON_ROOT: 0
-          SKIP_JDK_VERSION_CHECK: "true"
+      - name: Accept Licenses and Compile APK
         run: |
-          # 1. Create the exact legacy path Buildozer's scanner expects
-          mkdir -p ~/.buildozer/android/platform/android-sdk/tools/bin
+          # Pre-accept all Android SDK licenses in the runner's path
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
           
-          # 2. Symlink GitHub's active modern sdkmanager straight into Buildozer's expected legacy location
-          ln -sf $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager ~/.buildozer/android/platform/android-sdk/tools/bin/sdkmanager
-          
-          # 3. Copy valid global license keys into place
-          mkdir -p ~/.buildozer/android/platform/android-sdk/licenses
-          if [ -d "$ANDROID_HOME/licenses" ]; then
-            cp -r $ANDROID_HOME/licenses/* ~/.buildozer/android/platform/android-sdk/licenses/
-          fi
-          
-          # 4. Fire up the compiler naturally
+          # Fire up Buildozer using the matching environments
           buildozer android debug
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BlackFoxy-AI-APK
+          path: bin/*.apk
