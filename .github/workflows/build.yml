@@ -25,6 +25,15 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept Global Android Licenses
+        run: |
+          mkdir -p ~/.android
+          touch ~/.android/repositories.cfg
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+
       - name: Install system packages
         run: |
           sudo apt update
@@ -71,21 +80,17 @@ jobs:
           log_level = 2
           EOF
 
-      - name: Automate Buildozer Dependencies and Build
+      - name: Force Global Paths and Build APK
         env:
           BUILDOZER_WARN_ON_ROOT: 0
           SKIP_JDK_VERSION_CHECK: "true"
-          GRADLE_OPTS: "-Dorg.gradle.project.android.builder.sdkDownload=true"
+          # Overwrite Buildozer's inner tool configs with the system paths
+          BUILDOZER_ANDROID_SDK_PATH: "/usr/local/lib/android/sdk"
+          BUILDOZER_ANDROID_NDK_PATH: "/usr/local/lib/android/sdk/ndk/27.3.13750724"
+          ANDROID_HOME: "/usr/local/lib/android/sdk"
+          ANDROID_NDK_HOME: "/usr/local/lib/android/sdk/ndk/27.3.13750724"
         run: |
-          # 1. Pre-populate default license directory structures natively
-          mkdir -p ~/.buildozer/android/platform/android-sdk/licenses
-          
-          # 2. Inject license hashes directly into the build environment cache
-          printf "24333f8a63b6825ea1c5573490f22d18672203a0\n84831b9409646a918e30573bab4c9c91346d8abd\n504667f4c0de7af1a06de9f4b1727b84351f2910\n" > ~/.buildozer/android/platform/android-sdk/licenses/android-sdk-license
-          printf "8493401003b56243d2047d6165fb10faea9742c5\n" > ~/.buildozer/android/platform/android-sdk/licenses/android-googletv-license
-          printf "d974f761403f24cb56e45e516c88a42f1414e0a2\n" > ~/.buildozer/android/platform/android-sdk/licenses/android-sdk-preview-license
-          
-          # 3. Clean compilation run
+          # Run the compilation directly using system tools
           buildozer android debug
 
       - name: Upload APK Artifact
