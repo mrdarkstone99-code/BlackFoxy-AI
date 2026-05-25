@@ -80,24 +80,22 @@ jobs:
           log_level = 2
           EOF
 
-      - name: Sync Licenses and Build APK
+      - name: Spoof Buildozer SDK Path and Build
         env:
           BUILDOZER_WARN_ON_ROOT: 0
           SKIP_JDK_VERSION_CHECK: "true"
         run: |
-          # 1. Pre-create Buildozer's expected internal license directory
-          mkdir -p ~/.buildozer/android/platform/android-sdk/licenses
+          # 1. Create the exact legacy path Buildozer's scanner expects
+          mkdir -p ~/.buildozer/android/platform/android-sdk/tools/bin
           
-          # 2. Copy the officially accepted global licenses directly into Buildozer's workspace path
+          # 2. Symlink GitHub's active modern sdkmanager straight into Buildozer's expected legacy location
+          ln -sf $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager ~/.buildozer/android/platform/android-sdk/tools/bin/sdkmanager
+          
+          # 3. Copy valid global license keys into place
+          mkdir -p ~/.buildozer/android/platform/android-sdk/licenses
           if [ -d "$ANDROID_HOME/licenses" ]; then
             cp -r $ANDROID_HOME/licenses/* ~/.buildozer/android/platform/android-sdk/licenses/
           fi
-
-          # 3. Clean execution without interactive piping over structural paths
-          buildozer android debug --sdk_path=$ANDROID_HOME
-
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: BlackFoxy-AI-APK
-          path: bin/*.apk
+          
+          # 4. Fire up the compiler naturally
+          buildozer android debug
