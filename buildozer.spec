@@ -1,74 +1,25 @@
-name: CI
-on:
-  push:
-    branches: [ main ]
+[app]
+title = BlackFoxy AI
+package.name = blackfoxyai
+package.domain = org.blackfoxy
 
-jobs:
-  build:
-    runs-on: ubuntu-22.04
+source.dir = .
+source.include_exts = py,png,jpg,kv,atlas,json
 
-    steps:
-      - uses: actions/checkout@v4
+version = 1.0
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
+requirements = python3,kivy,kivymd,pyttsx3
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+orientation = portrait
+fullscreen = 0
 
-      - name: Install System Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            ccache \
-            git \
-            libffi-dev \
-            libssl-dev \
-            libsqlite3-dev \
-            lld \
-            bsdmainutils \
-            python3-setuptools \
-            unzip \
-            zip \
-            autoconf \
-            libtool \
-            pkg-config \
-            zlib1g-dev
+android.permissions = INTERNET, RECORD_AUDIO
 
-      - name: Install Buildozer and Cython
-        run: |
-          pip install --upgrade pip
-          pip install "cython<3.0.0" virtualenv buildozer
+android.api = 33
+android.minapi = 21
+android.ndk = 25b
+android.accept_sdk_license = True
 
-      - name: Auto-Generate Clean Buildozer Spec
-        run: |
-          rm -f buildozer.spec
-          cat << 'EOF' > buildozer.spec
-          [app]
-          title = BlackFoxy AI
-          package.name = blackfoxy
-          package.domain = org.foxy
-          source.dir = .
-          source.include_exts = py,png,jpg,kv,atlas
-          version = 1.0
-          requirements = hostpython3,python3,kivy==2.3.0,kivymd==1.2.0,pillow
-          orientation = portrait
-          fullscreen = 1
-          android.archs = arm64-v8a
-
-          [buildozer]
-          log_level = 2
-          EOF
-
-      - name: Initialize and Build APK
-        env:
-          BUILDOZER_WARN_ON_ROOT: 0
-        run: |
-          mkdir -p ~/.buildozer
-          buildozer android debug
+[buildozer]
+log_level = 2
+warn_on_root = 1
