@@ -1,94 +1,67 @@
 name: CI
 
 on:
+  workflow_dispatch:
   push:
-    branches:
-      - main
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    branches: [ main ]
 
 jobs:
   build:
     runs-on: ubuntu-22.04
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-      - name: Set up Java 17
-        uses: actions/setup-java@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          distribution: temurin
-          java-version: "17"
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+          python-version: '3.10'
 
       - name: Install system packages
         run: |
           sudo apt update
           sudo apt install -y \
-            build-essential \
-            git \
-            zip \
-            unzip \
-            libffi-dev \
-            libssl-dev \
-            zlib1g-dev \
-            pkg-config \
-            autoconf \
-            libtool
+            git zip unzip wget \
+            openjdk-17-jdk \
+            autoconf libtool pkg-config \
+            zlib1g-dev libncurses5-dev libncursesw5-dev \
+            libtinfo5 cmake libffi-dev libssl-dev \
+            build-essential ccache
 
-      - name: Install Python packages
+      - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install wheel
-          pip install "cython<3.0"
-          pip install buildozer virtualenv
+          pip install buildozer cython==0.29.37
 
-      - name: Generate buildozer.spec
-        run: |
-          cat > buildozer.spec << EOF
-          [app]
-          title = BlackFoxy AI
-          package.name = blackfoxy
-          package.domain = org.foxy
-          source.dir = .
-          source.include_exts = py,png,jpg,kv,atlas
-          version = 1.0
-
-          requirements = python3,kivy==2.3.0,kivymd==1.2.0,pillow
-
-          orientation = portrait
-          fullscreen = 1
-
-          android.archs = arm64-v8a
-          android.api = 33
-          android.minapi = 24
-
-          [buildozer]
-          log_level = 2
-          EOF
-
-      - name: Pre-seed Buildozer Licenses and Build APK
-        env:
-          BUILDOZER_WARN_ON_ROOT: 0
-          SKIP_JDK_VERSION_CHECK: "true"
-        run: |
-          # 1. Force create Buildozer's prospective SDK target directories
-          mkdir -p /home/runner/.buildozer/android/platform/android-sdk/licenses
-          
-          # 2. Inject the accepted license hashes directly into Buildozer's folder structure
-          echo -e "24333f8a63b6825ea9c5514f83c2829b004d1fee\n84831b9409646a918e30573bab4c9c91346d8abd\n504667f4c0de7af1a06de9f4b1727b84351f2910" > /home/runner/.buildozer/android/platform/android-sdk/licenses/android-sdk-license
-          echo -e "85dcc172a29a7853a1b02421317b522688b7f291" > /home/runner/.buildozer/android/platform/android-sdk/licenses/android-googletv-license
-          echo -e "d975f751698a77b662f1254ddbeed39c30ddeb77" > /home/runner/.buildozer/android/platform/android-sdk/licenses/android-sdk-preview-license
-          
-          # 3. Execute the compiler
-          buildozer android debug
-
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
+      - name: Cache Buildozer directory
+        uses: actions/cache@v4
         with:
-          name: BlackFoxy-AI-APK
+          path: ~/.buildozer
+          key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+          restore-keys: buildozer-${{ runner.os }}-
+
+      - name: Seed sdkmanager and accept licenses
+        run: |
+          SDK="$HOME/.buildozer/android/platform/android-sdk"
+          mkdir -p "$SDK/cmdline-tools"
+
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O tools.zip
+          unzip -q tools.zip -d "$SDK/cmdline-tools"
+          mv "$SDK/cmdline-tools/cmdline-tools" "$SDK/cmdline-tools/latest"
+
+          # Accept licenses so Buildozer is never prompted interactively
+          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK" --licenses
+
+          # Do NOT install platform-tools / build-tools here.
+          # Buildozer and p4a manage those themselves.
+
+      - name: Build APK
+        run: buildozer -v android debug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: app-debug
           path: bin/*.apk
