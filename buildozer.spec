@@ -8,7 +8,7 @@ source.include_exts = py,png,jpg,jpeg,kv,atlas,json,db,txt
 
 version = 1.0
 
-requirements = python3,kivy==2.3.0,kivymd==1.2.0,sqlite3,plyer,argostranslate
+requirements = python3,kivy==2.3.1,kivymd==1.2.0,sqlite3,plyer,argostranslate
 
 orientation = portrait
 fullscreen = 0
