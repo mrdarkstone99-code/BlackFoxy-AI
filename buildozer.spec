@@ -16,7 +16,6 @@ android.permissions = INTERNET,RECORD_AUDIO,WRITE_EXTERNAL_STORAGE,READ_EXTERNAL
 android.api = 33
 android.minapi = 21
 android.ndk = 25b
-android.python_version = 3.11
 android.accept_sdk_license = True
 android.archs = arm64-v8a
 
