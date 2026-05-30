@@ -1,142 +1,196 @@
-import json
+"""
+brain.py — FoxyAI Brain
+Offline LLM using llama-cpp-python (TinyLlama or Phi-2 GGUF).
+Streaming responses. Full personality. No internet needed.
+"""
+
 import os
-import random
-from dataclasses import dataclass, field
-from typing import Optional
+import threading
+from typing import Generator, Optional, Callable
+
+from memory import FoxyMemory
+from emotion import detect_emotion, build_personality_instruction
 
 
-# ── Data ────────────────────────────────────────────────────────────────────
+# ── Model config ──────────────────────────────────────────────────────────────
+# Download one of these GGUF models and place in same folder as brain.py:
+#
+# FASTER (700MB) — recommended for 3GB RAM phones:
+#   https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF
+#   filename: tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
+#
+# SMARTER (1.4GB) — recommended for 4GB+ RAM phones:
+#   https://huggingface.co/TheBloke/phi-2-GGUF
+#   filename: phi-2.Q4_K_M.gguf
 
-@dataclass
-class UserProfile:
-    messages: int = 0
-    bond: float = 0.5
-    name: Optional[str] = None
+MODEL_PATH = "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"  # change if using phi-2
 
-
-@dataclass
-class EmotionState:
-    mood: str = "neutral"
-    intensity: float = 1.0
-
-
-# ── Emotion Engine ───────────────────────────────────────────────────────────
-
-EMOTION_RULES: list[tuple[list[str], str, float]] = [
-    (["sad", "alone", "lonely", "cry", "hurt"],   "soft",    1.2),
-    (["love", "miss", "crush", "adore"],           "flirt",   1.0),
-    (["angry", "hate", "mad", "furious", "ugh"],   "roast",   1.3),
-    (["happy", "yay", "excited", "great"],         "hype",    1.1),
-]
-
-def detect_emotion(text: str) -> EmotionState:
-    t = text.lower()
-    for keywords, mood, intensity in EMOTION_RULES:
-        if any(kw in t for kw in keywords):
-            return EmotionState(mood=mood, intensity=intensity)
-    return EmotionState()
-
-
-# ── Personality Layer ────────────────────────────────────────────────────────
-
-MOOD_TEMPLATES: dict[str, list[str]] = {
-    "soft":    ["…hey\nI'm here.\n{msg}", "shh, it's okay.\n{msg}", "I got you.\n{msg}"],
-    "flirt":   ["{msg} 😏", "{msg} ~ 🦊", "oh? {msg}"],
-    "roast":   ["{msg}\n💀", "{msg} (lmaooo)", "bro… {msg}"],
-    "hype":    ["LET'S GO!! {msg} 🔥", "{msg} !!", "YESSS {msg}"],
-    "neutral": ["{msg}", "🐺 {msg}", "{msg} ."],
+MODEL_SETTINGS = {
+    "n_ctx": 2048,        # context window
+    "n_threads": 4,       # CPU threads — increase if phone has more cores
+    "n_batch": 128,       # batch size
+    "verbose": False,
 }
 
-def apply_personality(msg: str, state: EmotionState) -> str:
-    templates = MOOD_TEMPLATES.get(state.mood, MOOD_TEMPLATES["neutral"])
-    return random.choice(templates).format(msg=msg)
+GENERATION_SETTINGS = {
+    "max_tokens": 256,    # keep short for WhatsApp style
+    "temperature": 0.85,  # personality randomness
+    "top_p": 0.95,
+    "top_k": 40,
+    "repeat_penalty": 1.15,
+    "stop": ["User:", "Human:", "\n\n\n"],
+}
 
 
-# ── Persistence ──────────────────────────────────────────────────────────────
+# ── Brain ─────────────────────────────────────────────────────────────────────
 
-class UserStore:
-    def __init__(self, path: str = "foxy_god.json"):
-        self.path = path
-        self._data: dict[str, dict] = self._load()
+class FoxyBrain:
+    """
+    Core AI engine. Loads model once, keeps in RAM.
+    All responses stream token by token for fast feel.
+    """
 
-    def _load(self) -> dict:
-        if os.path.exists(self.path):
-            with open(self.path) as f:
-                return json.load(f)
-        return {}
+    def __init__(self, model_path: str = MODEL_PATH):
+        self.model_path = model_path
+        self.memory = FoxyMemory()
+        self._llm = None
+        self._lock = threading.Lock()
+        self._load_model()
 
-    def save(self) -> None:
-        with open(self.path, "w") as f:
-            json.dump(self._data, f, indent=4)
+    def _load_model(self) -> None:
+        """Load LLM into RAM once at startup."""
+        if not os.path.exists(self.model_path):
+            print(f"[FoxyBrain] Model not found at {self.model_path}")
+            print("[FoxyBrain] Running in echo mode — download a GGUF model to enable AI")
+            return
 
-    def get(self, uid: str) -> UserProfile:
-        raw = self._data.setdefault(uid, {})
-        return UserProfile(**{k: v for k, v in raw.items() if k in UserProfile.__dataclass_fields__})
+        try:
+            from llama_cpp import Llama
+            print(f"[FoxyBrain] Loading model: {self.model_path}")
+            self._llm = Llama(model_path=self.model_path, **MODEL_SETTINGS)
+            print("[FoxyBrain] Model loaded successfully")
+        except ImportError:
+            print("[FoxyBrain] llama-cpp-python not installed")
+        except Exception as e:
+            print(f"[FoxyBrain] Failed to load model: {e}")
 
-    def update(self, uid: str, profile: UserProfile) -> None:
-        self._data[uid] = {
-            "messages": profile.messages,
-            "bond":     profile.bond,
-            "name":     profile.name,
-        }
+    def _build_prompt(self, user_text: str, emotion, bond_level: str) -> str:
+        """Assemble the full prompt with personality + memory + history."""
+        personality = build_personality_instruction(emotion, bond_level)
+        context     = self.memory.build_context_prompt()
+        history     = self.memory.chat.recent(10)
 
+        # Format chat history
+        history_text = ""
+        for msg in history:
+            role = "User" if msg["role"] == "user" else "Foxy"
+            history_text += f"{role}: {msg['content']}\n"
 
-# ── LLM Stub (swap in real API call here) ────────────────────────────────────
-
-def call_llm(prompt: str, system: str = "") -> str:
-    """Replace this with your actual LLM call, e.g. Anthropic / OpenAI."""
-    return prompt  # passthrough for now
-
-
-# ── Main Agent ───────────────────────────────────────────────────────────────
-
-class FoxyGodAI:
-    def __init__(self, db_path: str = "foxy_god.json"):
-        self.store = UserStore(db_path)
-
-    def reply(self, uid: str, text: str) -> str:
-        # 1. Load + update user profile
-        profile = self.store.get(uid)
-        profile.messages += 1
-        profile.bond = min(1.0, profile.bond + 0.01)  # grow bond over time
-
-        # 2. Detect emotion
-        state = detect_emotion(text)
-
-        # 3. Build a mood-aware system prompt for the LLM
-        system_prompt = self._build_system_prompt(state, profile)
-
-        # 4. Call LLM
-        raw = call_llm(text, system=system_prompt)
-
-        # 5. Wrap with personality
-        final = apply_personality(raw, state)
-
-        # 6. Persist
-        self.store.update(uid, profile)
-        self.store.save()
-
-        return f"🐺 Foxy AI:\n{final}"
-
-    def _build_system_prompt(self, state: EmotionState, profile: UserProfile) -> str:
-        bond_desc = (
-            "a close companion" if profile.bond > 0.75
-            else "a friendly acquaintance" if profile.bond > 0.4
-            else "a new stranger"
+        prompt = (
+            f"<|system|>\n{personality}\n\nContext: {context}<|end|>\n"
+            f"{history_text}"
+            f"User: {user_text}\n"
+            f"Foxy:"
         )
-        return (
-            f"You are Foxy, a sharp-witted fox spirit. "
-            f"Current mood: {state.mood} (intensity {state.intensity}). "
-            f"You're talking to {bond_desc} (bond={profile.bond:.2f})."
-        )
+        return prompt
 
+    def _determine_bond(self) -> str:
+        total = self.memory.chat.total_count()
+        if total > 500:   return "best friends, years of history"
+        if total > 100:   return "close friends, know each other well"
+        if total > 20:    return "friends, comfortable with each other"
+        return "just met, still getting to know each other"
 
-# ── Entry point ───────────────────────────────────────────────────────────────
+    def reply_stream(
+        self,
+        user_text: str,
+        on_token: Callable[[str], None],
+        on_done: Callable[[str], None],
+    ) -> None:
+        """
+        Stream reply token by token.
+        on_token(token) called for each word as it generates.
+        on_done(full_reply) called when complete.
+        Run this in a background thread.
+        """
+        def _run():
+            # Save user message + extract facts
+            emotion = detect_emotion(user_text)
+            self.memory.chat.add("user", user_text, emotion.mood)
+            self.memory.emotion.log(emotion.mood, user_text[:100])
+            self.memory.extract_and_save_user_facts(user_text)
 
-if __name__ == "__main__":
-    ai = FoxyGodAI()
-    uid = "user_001"
+            bond = self._determine_bond()
+            full_reply = ""
 
-    for msg in ["I feel so alone tonight", "I love you!!", "I'm so angry rn"]:
-        print(ai.reply(uid, msg))
-        print()
+            if self._llm is None:
+                # Fallback echo mode
+                fallback = self._fallback_reply(user_text, emotion)
+                for word in fallback.split():
+                    on_token(word + " ")
+                    full_reply += word + " "
+                on_done(full_reply.strip())
+                self.memory.chat.add("assistant", full_reply.strip(), emotion.mood)
+                return
+
+            prompt = self._build_prompt(user_text, emotion, bond)
+
+            with self._lock:
+                try:
+                    stream = self._llm(
+                        prompt,
+                        stream=True,
+                        **GENERATION_SETTINGS,
+                    )
+                    for chunk in stream:
+                        token = chunk["choices"][0]["text"]
+                        if token:
+                            on_token(token)
+                            full_reply += token
+                except Exception as e:
+                    error_msg = f"brain error: {e}"
+                    on_token(error_msg)
+                    full_reply = error_msg
+
+            reply = full_reply.strip()
+            self.memory.chat.add("assistant", reply, emotion.mood)
+            on_done(reply)
+
+        threading.Thread(target=_run, daemon=True).start()
+
+    def reply(self, user_text: str) -> str:
+        """
+        Blocking reply. Use reply_stream for UI.
+        This is for testing or non-UI contexts.
+        """
+        result = []
+        done_event = threading.Event()
+
+        def on_token(t): result.append(t)
+        def on_done(r):  done_event.set()
+
+        self.reply_stream(user_text, on_token, on_done)
+        done_event.wait(timeout=60)
+        return "".join(result).strip()
+
+    def _fallback_reply(self, text: str, emotion) -> str:
+        """Used when no model is loaded. Personality-driven template replies."""
+        t = text.lower()
+        mood = emotion.mood
+
+        if mood == "soft":
+            return "hey... i'm here okay? you don't have to go through this alone 🥺"
+        if mood == "flirt":
+            return "oh stop it you 😏 you know exactly what you're doing"
+        if mood == "roast":
+            return "bro really came here to start something 💀 okay say less"
+        if mood == "hype":
+            return "LETS GOOO!! 🔥🔥 okay yes tell me everything"
+        if mood == "comedy":
+            return "lmaoo okay you actually got me there 😂 not gonna lie"
+        if mood == "smart":
+            return "okay so here's the thing — " + text[:50] + " ... let me break that down for you"
+        return "yeah? tell me more 👀"
+
+    def close(self):
+        self.memory.close()
